@@ -6,7 +6,8 @@
 
 import os
 import torch
-from torch._six import container_abcs, string_classes, int_classes
+from torch._six import string_classes
+import collections.abc as container_abcs
 from torch.utils.data import DataLoader
 from fastreid.utils import comm
 
@@ -14,6 +15,8 @@ from . import samplers
 from .common import CommDataset, LMDBDataset
 from .datasets import DATASET_REGISTRY
 from .transforms import build_transforms
+
+int_classes = int
 
 def parser_kwargs(additional_args):
     kwargs = {}
