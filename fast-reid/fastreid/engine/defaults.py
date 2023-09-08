@@ -13,6 +13,7 @@ import logging
 import os, random
 import sys
 from collections import OrderedDict
+import pickle
 
 import torch
 import torch.nn.functional as F
@@ -32,6 +33,8 @@ from fastreid.utils.file_io import PathManager
 from fastreid.utils.logger import setup_logger
 from . import hooks
 from .train_loop import SimpleTrainer
+
+import numpy as np
 
 __all__ = ["default_argument_parser", "default_setup", "DefaultPredictor", "DefaultTrainer"]
 
@@ -435,7 +438,6 @@ class DefaultTrainer(SimpleTrainer):
             dict: a dict of result metrics
         """
         logger = logging.getLogger(__name__)
-
         results = OrderedDict()
         for idx, dataset_name in enumerate(cfg.DATASETS.TESTS):
             logger.info("Prepare testing set")
@@ -447,9 +449,12 @@ class DefaultTrainer(SimpleTrainer):
                 )
                 results[dataset_name] = {}
                 continue
-            results_i = inference_on_dataset(model, data_loader, evaluator)
+            results_i, sim_mtx, img_paths, labels  = inference_on_dataset(model, data_loader, evaluator)
             results[dataset_name] = results_i
-
+        save_dict = {'sim_mtx': sim_mtx, 'img_paths' : img_paths, 'labels': labels}
+        #np.savez('resnet50.npz', save_dict)
+        with open('mevid_trained_market.pkl','wb') as fp:
+            pickle.dump(save_dict,fp)
         if comm.is_main_process():
             assert isinstance(
                 results, dict

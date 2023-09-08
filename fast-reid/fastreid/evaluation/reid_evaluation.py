@@ -46,6 +46,7 @@ class ReidEvaluator(DatasetEvaluator):
     def cal_dist(metric: str, query_feat: torch.tensor, gallery_feat: torch.tensor):
         assert metric in ["cosine", "euclidean"], "must choose from [cosine, euclidean], but got {}".format(metric)
         if metric == "cosine":
+            sim_mtx =  torch.mm(query_feat, gallery_feat.t())
             dist = 1 - torch.mm(query_feat, gallery_feat.t())
         else:
             m, n = query_feat.size(0), gallery_feat.size(0)
@@ -54,7 +55,7 @@ class ReidEvaluator(DatasetEvaluator):
             dist = xx + yy
             dist.addmm_(query_feat, gallery_feat.t(), beta=1, alpha=-2)
             dist = dist.clamp(min=1e-12).sqrt()  # for numerical stability
-        return dist.cpu().numpy()
+        return dist.cpu().numpy(), sim_mtx.cpu().numpy()
 
     def evaluate(self):
         if comm.get_world_size() > 1:
@@ -100,15 +101,15 @@ class ReidEvaluator(DatasetEvaluator):
             query_features = F.normalize(query_features, dim=1)
             gallery_features = F.normalize(gallery_features, dim=1)
 
-        dist = self.cal_dist(self.cfg.TEST.METRIC, query_features, gallery_features)
+        dist, sim_mtx = self.cal_dist(self.cfg.TEST.METRIC, query_features, gallery_features)
 
         if self.cfg.TEST.RERANK.ENABLED:
             logger.info("Test with rerank setting")
             k1 = self.cfg.TEST.RERANK.K1
             k2 = self.cfg.TEST.RERANK.K2
             lambda_value = self.cfg.TEST.RERANK.LAMBDA
-            q_q_dist = self.cal_dist(self.cfg.TEST.METRIC, query_features, query_features)
-            g_g_dist = self.cal_dist(self.cfg.TEST.METRIC, gallery_features, gallery_features)
+            q_q_dist, _ = self.cal_dist(self.cfg.TEST.METRIC, query_features, query_features)
+            g_g_dist, _ = self.cal_dist(self.cfg.TEST.METRIC, gallery_features, gallery_features)
             re_dist = re_ranking(dist, q_q_dist, g_g_dist, k1, k2, lambda_value)
             query_features = query_features.numpy()
             gallery_features = gallery_features.numpy()
@@ -137,4 +138,4 @@ class ReidEvaluator(DatasetEvaluator):
                 ind = np.argmin(np.abs(fprs - fpr))
                 self._results["TPR@FPR={:.0e}".format(fpr)] = tprs[ind]
 
-        return copy.deepcopy(self._results)
+        return copy.deepcopy(self._results), dist

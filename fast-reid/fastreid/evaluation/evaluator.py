@@ -104,17 +104,22 @@ def inference_on_dataset(model, data_loader, evaluator):
     num_warmup = min(5, total - 1)
     start_time = time.perf_counter()
     total_compute_time = 0
+    img_paths = []
+    labels = []
     with inference_context(model), torch.no_grad():
         for idx, inputs in enumerate(data_loader):
             if idx == num_warmup:
                 start_time = time.perf_counter()
                 total_compute_time = 0
-
+            # print(inputs.keys(), "input_keys")
             start_compute_time = time.perf_counter()
             outputs = model(inputs)
             total_compute_time += time.perf_counter() - start_compute_time
             evaluator.process(inputs, outputs)
 
+            
+            img_paths.extend(inputs['img_paths'])
+            labels.extend(inputs['targets'])
             idx += 1
             iters_after_start = idx + 1 - num_warmup * int(idx >= num_warmup)
             seconds_per_batch = total_compute_time / iters_after_start
@@ -144,12 +149,18 @@ def inference_on_dataset(model, data_loader, evaluator):
             total_compute_time_str, total_compute_time / (total - num_warmup)
         )
     )
-    results = evaluator.evaluate()
+    results, sim_mtx = evaluator.evaluate()
+    print(sim_mtx.shape)
+    print(len(img_paths))
+    print(img_paths[0])
+    print(img_paths[3369])
+    print(len(labels))
+    #print(sim_mtx, img_paths, labels)
     # An evaluator may return None when not in main process.
     # Replace it by an empty dict instead to make it easier for downstream code to handle
     if results is None:
         results = {}
-    return results
+    return results, sim_mtx, img_paths, labels
 
 
 @contextmanager
